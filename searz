@@ -21,7 +21,7 @@ if [[ -z $PKG_CMD ]]; then
   elif command -v yum >/dev/null 2>&1; then
     PKG_CMD=yum
   elif command -v apt >/dev/null 2>&1; then
-    PKG_CMD=apt
+    PKG_CMD='sudo apt'
   else
     echo "No suitable package manager found." >&2
     exit 1
@@ -67,7 +67,7 @@ __fzf_preview() {
     dnf|yum)
       $PKG_CMD info "$1" 2>/dev/null
       ;;
-    apt)
+    sudo\ apt)
       apt show "$1" 2>/dev/null
       ;;
   esac
@@ -81,8 +81,8 @@ __pkg_list() {
     dnf|yum)
       $PKG_CMD list available | tail -n +2 | awk '{print $1}'
       ;;
-    apt)
-      apt search . | grep -P '^\w' | awk '{print $1}'
+    sudo\ apt)
+      apt-cache dumpavail | grep -P '^Package: ' | cut -d ' ' -f 2
       ;;
   esac
 }
@@ -109,7 +109,7 @@ ARGS=("$@")
 
 if [[ ${#ARGS[@]} -eq 0 ]]; then
   case "$PKG_CMD" in
-    pacman|sudo\ pacman|paru|yay|apt)
+    pacman|sudo\ pacman|paru|yay|sudo\ apt)
       ARGS=("install")
       ;;
     dnf|yum)
