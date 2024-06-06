@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+
+shopt -s lastpipe
+
+export SHELL=bash
+
+# Detect and set the appropriate package manager
+if [[ -z $PKG_CMD ]]; then
+  if command -v paru >/dev/null 2>&1; then
+    PKG_CMD=paru
+  elif command -v yay >/dev/null 2>&1; then
+    PKG_CMD=yay
+  elif command -v pacman >/dev/null 2>&1; then
+    if [[ $EUID -eq 0 ]] || [[ -f /usr/bin/msys-2.0.dll ]]; then
+      PKG_CMD=pacman
+    else
+      PKG_CMD='sudo pacman'
+    fi
+  elif command -v dnf >/dev/null 2>&1; then
+    PKG_CMD=dnf
+  elif command -v yum >/dev/null 2>&1; then
+    PKG_CMD=yum
+  elif command -v apt >/dev/null 2>&1; then
+    PKG_CMD=apt
+  else
+    echo "No suitable package manager found." >&2
+    exit 1
+  fi
+fi
+
+__pkg_help() {
+  PROG=$(basename "$0")
+  cat >&2 <<EOF
+Usage: $PROG [OPTS]
+
+A fzf terminal UI for various package managers.
+
+sudo is invoked automatically, if needed.
+
+Multiple packages can be selected.
+
+The package manager can be changed with the environment variable: PKG_CMD
+
+Keybindings:
+  TAB                    Select
+  Shift+TAB              Deselect
+
+OPTS:
+  -h, --help             Print this message
+
+  All other options are passed to the package manager.
+  Default: install (install packages)
+
+Examples:
+  searz install --setopt=clean_requirements_on_remove=true
+  searz remove
+  PKG_CMD=yay searz
+EOF
+  exit 1
+}
+
+__fzf_preview() {
+  case "$PKG_CMD" in
+    pacman|sudo\ pacman|paru|yay)
+      $PKG_CMD --color=always -Si "$1" | grep --color=never -v '^ '
+      ;;
+    dnf|yum)
+      $PKG_CMD info "$1" 2>/dev/null
+      ;;
+    apt)
+      apt show "$1" 2>/dev/null
+      ;;
+  esac
+}
+
+__pkg_list() {
+  case "$PKG_CMD" in
+    pacman|sudo\ pacman|paru|yay)
+      $PKG_CMD --color=always -Sl | sed -E 's: :/:; s/ (\x1b\[[0-9;]*m)?unknown-version/\1/'
+      ;;
+    dnf|yum)
+      $PKG_CMD list available | tail -n +2 | awk '{print $1}'
+      ;;
+    apt)
+      apt search . | grep -P '^\w' | awk '{print $1}'
+      ;;
+  esac
+}
+
+# Main
+
+while [[ -n $1 ]]; do
+  case $1 in
+  -h | --help)
+    __pkg_help
+    ;;
+  __fzf_preview)
+    shift
+    __fzf_preview "$@"
+    ;;
+  *)
+    break
+    ;;
+  esac
+  shift
+done
+
+ARGS=("$@")
+
+if [[ ${#ARGS[@]} -eq 0 ]]; then
+  case "$PKG_CMD" in
+    pacman|sudo\ pacman|paru|yay|apt)
+      ARGS=("install")
+      ;;
+    dnf|yum)
+      ARGS=("install")
+      ;;
+  esac
+fi
+
+declare -a PICKS
+__pkg_list |
+  fzf \
+    --multi \
+    --ansi \
+    --preview="'${BASH_SOURCE[0]}' __fzf_preview {1}" |
+  readarray -t PICKS
+
+if [[ ${#PICKS[@]} -eq 0 ]]; then
+  exit 0
+fi
+
+declare -a PKGS
+for PICK in "${PICKS[@]}"; do
+  PKGS+=("${PICK%% *}")
+done
+
+exec $PKG_CMD "${ARGS[@]}" "${PKGS[@]}"
