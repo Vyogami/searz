@@ -1,5 +1,7 @@
 # Searz
 
+![screenshot](./assets/ss.png)
+
 Searz is an OS-agnostic package fuzzy finder i.e it provides a fuzzy finder interface for various package managers across different Linux distributions. It allows users to easily search, preview, and manage packages from the command line.
 
 ## Features
